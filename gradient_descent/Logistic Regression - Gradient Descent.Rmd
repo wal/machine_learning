@@ -1,0 +1,87 @@
+---
+title: "LogisticRegression - Gradient Descent"
+author: "Wal McConnell"
+date: "9/29/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Logistic Regression
+
+A classic supervised statistical technique for predictive modelling which is based on the linear hypothesis: y = mx + c
+
+
+In order to apply the linear hypothesis to a dataset with the end aim of modelling the situation under  investigation, there needs to be a linear relationship between the variables in question.
+
+
+```{r cars}
+attach(mtcars)
+plot(disp, mpg, col = "blue", pch = 20)
+```
+
+Model : Calculate the coefficients by reducing the value of the MSE : Mean Squared Error
+
+```{r}
+model <- lm(mpg ~ disp, data = mtcars)
+coef(model)
+y_preds <- predict(model)
+plot(disp, mpg, col = "blue", pch = 20)
+abline(model)
+```
+
+
+# Gradient Descent
+
+The Gradient Descent Algorithm which can be used to find the optimal intercept and gradient for any set of data in which a linear relationship exists
+
+```{r}
+
+
+
+costs <- data.frame()
+
+gradientDesc <- function(x, y, learn_rate, conv_threshold, n, max_iter) {
+  plot(x, y, col = "blue", pch = 20)
+  m <- runif(1, 0, 1)
+  c <- runif(1, 0, 1)
+  
+  yhat <- m * x + c
+  MSE <- sum((y - yhat) ^ 2) / n
+  
+  converged = F
+  iterations = 0
+  
+  while(converged == F) {
+    ## Implement the gradient descent algorithm
+    m <- m - learn_rate * ((1 / n) * (sum((yhat - y) * x)))
+    c <- c - learn_rate * ((1 / n) * (sum(yhat - y)))
+    yhat <- m * x + c
+    MSE_new <- sum((y - yhat) ^ 2) / n
+    
+    costs <- rbind(costs, data.frame(c(iterations,MSE_new, m, c)))
+    
+    if(MSE - MSE_new <= conv_threshold) {
+      abline(c, m) 
+      converged = T
+      return(paste("Optimal intercept:", c, "Optimal slope:", m))
+    }
+    iterations = iterations + 1
+    if(iterations > max_iter) { 
+      abline(c, m) 
+      converged = T
+      return(paste("Optimal intercept:", c, "Optimal slope:", m))
+    }
+  }
+}
+
+
+#gradientDesc(disp, mpg, 0.0000293, 0.001, 32, 2500000)
+gradientDesc(disp, mpg, 0.0000293, 0.001, 32, 250)
+
+nrow(costs)
+
+```
+

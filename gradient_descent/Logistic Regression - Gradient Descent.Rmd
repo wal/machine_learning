@@ -1,87 +1,116 @@
 ---
-title: "LogisticRegression - Gradient Descent"
+title: "Linear Regression & Gradient Descent"
 author: "Wal McConnell"
 date: "9/29/2017"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
+library(tidyverse)
+library(reshape2)
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Logistic Regression
-
-A classic supervised statistical technique for predictive modelling which is based on the linear hypothesis: y = mx + c
-
-
-In order to apply the linear hypothesis to a dataset with the end aim of modelling the situation under  investigation, there needs to be a linear relationship between the variables in question.
+A supervised statistical technique for predictive modelling which is based on the linear hypothesis: y = mx + c. Therefore there needs to be a linear relationship between the variables in question.
 
 
 ```{r cars}
-attach(mtcars)
-plot(disp, mpg, col = "blue", pch = 20)
+x <- runif(1000, 0, 10)
+y <- x + rnorm(1000) + 3
+data <- data.frame(x=x, y=y)
 ```
 
-Model : Calculate the coefficients by reducing the value of the MSE : Mean Squared Error
+# Simple Linear Model
 
-```{r}
-model <- lm(mpg ~ disp, data = mtcars)
-coef(model)
-y_preds <- predict(model)
-plot(disp, mpg, col = "blue", pch = 20)
-abline(model)
+``` {r}
+model <- lm(y ~ x, data)
+model
+ggplot(data, aes(x, y)) + 
+  geom_point(color="grey74", shape=21) +
+  geom_line(aes(y=fitted(model)), color = "blue")
 ```
 
 
 # Gradient Descent
 
-The Gradient Descent Algorithm which can be used to find the optimal intercept and gradient for any set of data in which a linear relationship exists
+The Gradient Descent Algorithm finds the optimal intercept and gradient for any set of data in which a linear relationship exists
 
 ```{r}
 
-
-
-costs <- data.frame()
-
-gradientDesc <- function(x, y, learn_rate, conv_threshold, n, max_iter) {
-  plot(x, y, col = "blue", pch = 20)
-  m <- runif(1, 0, 1)
-  c <- runif(1, 0, 1)
-  
-  yhat <- m * x + c
-  MSE <- sum((y - yhat) ^ 2) / n
-  
-  converged = F
-  iterations = 0
-  
-  while(converged == F) {
-    ## Implement the gradient descent algorithm
-    m <- m - learn_rate * ((1 / n) * (sum((yhat - y) * x)))
-    c <- c - learn_rate * ((1 / n) * (sum(yhat - y)))
-    yhat <- m * x + c
-    MSE_new <- sum((y - yhat) ^ 2) / n
-    
-    costs <- rbind(costs, data.frame(c(iterations,MSE_new, m, c)))
-    
-    if(MSE - MSE_new <= conv_threshold) {
-      abline(c, m) 
-      converged = T
-      return(paste("Optimal intercept:", c, "Optimal slope:", m))
-    }
-    iterations = iterations + 1
-    if(iterations > max_iter) { 
-      abline(c, m) 
-      converged = T
-      return(paste("Optimal intercept:", c, "Optimal slope:", m))
-    }
-  }
+# squared error cost function
+cost <- function(X, y, theta) {
+  sum( (X %*% theta - y)^2 ) / (2*length(y))
 }
 
+# learning rate and iteration limit
+alpha <- 0.01
+num_iters <- 1000
 
-#gradientDesc(disp, mpg, 0.0000293, 0.001, 32, 2500000)
-gradientDesc(disp, mpg, 0.0000293, 0.001, 32, 250)
+# keep history
+cost_history <- double(num_iters)
+theta_history <- list(num_iters)
 
-nrow(costs)
+# initialize coefficients
+theta <- matrix(c(0,0), nrow=2)
+
+# add a column of 1's for the intercept coefficient
+X <- cbind(1, matrix(x))
+
+# gradient descent
+for (i in 1:num_iters) {
+  error <- (X %*% theta - y)
+  delta <- t(X) %*% error / length(y)
+  theta <- theta - alpha * delta
+  
+  cost_history[i] <- cost(X, y, theta)
+  theta_history[[i]] <- theta
+}
+
+print(theta)
+```
+
+
+
+```{r}
+plot <- ggplot(data, aes(x, y)) + geom_point(color="grey")
+
+for (i in c(1,2,3,5,7,seq(10,num_iters,by=10))) {
+  plot <- plot + 
+    geom_abline(intercept=theta_history[[i]][1], 
+                slope=theta_history[[i]][2], 
+                color="brown2", alpha=0.2)
+}
+
+plot
+```
+
+
+## Cost Function
+```{r}
+cost_data <- melt(cost_history)
+
+ggplot(cost_data, aes(x = 1:nrow(cost_data), y = value)) + 
+  geom_line() +
+  labs(x = "Iterations", y = "Cost") +
+  ggtitle("Cost Function Reduction")
+```
+
+# Prediction
+
+```{r}
+px1 <- 4.21
+py1 <- theta[1] + (px1*theta[2])
+
+px2 <- 9.01
+py2 <- theta[1] + (px2*theta[2])
+
+
+predictions <- data.frame(x=c(px1,px2), y=c(py1,py2))
+
+ggplot(data, aes(x, y)) + 
+  geom_point(color="grey74", shape=21) +
+  geom_line(aes(y=fitted(model)), color = "blue") +
+  geom_point(data=predictions, aes(x=x, y=y), color="red", size=5, shape=4)
 
 ```
 

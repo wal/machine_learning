@@ -1,0 +1,183 @@
+---
+title: "Titanic - Who Survived"
+author: "Wal McConnell"
+date: "1 October 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(data.table)
+library(plyr)
+library(stringr)
+train <- fread("data/train.csv",na.strings = c(""," ",NA,"NA"))
+test <- fread("data/test.csv",na.strings = c(""," ",NA,"NA"))
+```
+
+Taken from https://www.hackerearth.com/practice/machine-learning/machine-learning-algorithms/logistic-regression-analysis-r/tutorial/
+
+
+## Data
+
+#### Training data
+```{r}
+head(train)
+str(train)
+```
+## Data Exploration
+
+#### Testing data
+```{r}
+head(train)
+str(train)
+```
+
+```{r}
+summary(train$Age)
+summary(test$Age)
+
+train[,.N/nrow(train),Pclass]
+test[,.N/nrow(test),Pclass]
+
+train [,.N/nrow(train),Sex]
+test [,.N/nrow(test),Sex]
+
+train [,.N/nrow(train),SibSp]
+test [,.N/nrow(test),SibSp]
+
+train [,.N/nrow(train),Parch]
+test [,.N/nrow(test),Parch] #extra 9
+
+summary(train$Fare)
+summary(test$Fare)
+
+train [,.N/nrow(train),Cabin]
+test [,.N/nrow(test),Cabin]
+
+train [,.N/nrow(train),Embarked] 
+test [,.N/nrow(test),Embarked]
+```
+
+
+### Missing Values
+
+```{r}
+colSums(is.na(train))
+colSums(is.na(test))
+```
+
+The variable Fare is skewed (right) in nature. We'll have to log transform it such that it resembles a normal distribution.
+
+The variable Parch has one extra level (9) in the test set as compared to the train set. We'll have to combine it with its mode value.
+
+## Fix the data
+
+```{r}
+alldata <- rbind(train,test,fill=TRUE)
+
+alldata [,title := strsplit(Name,split = "[,.]")]
+alldata [,title := ldply(.data = title,.fun = function(x) x[2])]
+alldata [,title := str_trim(title,side = "left")]
+
+
+alldata [,title := replace(title, which(title %in% c("Capt","Col","Don","Jonkheer","Major","Rev","Sir")), "Mr"),by=title]
+alldata [,title := replace(title, which(title %in% c("Lady","Mlle","Mme","Ms","the Countess","Dr","Dona")),"Mrs"),by=title]
+
+
+alldata [,abs_col := strsplit(x = Ticket,split = " ")]
+alldata [,abs_col := ldply(.data = abs_col,.fun = function(x)length(x))]
+alldata [,abs_col := ifelse(abs_col > 1,1,0)]
+
+for(i in "Age")
+  set(alldata,i = which(is.na(alldata[[i]])),j=i,value = median(alldata$Age,na.rm = T))
+
+alldata <- alldata[!is.na(Embarked)]
+
+for(i in "Fare")
+  set(alldata,i = which(is.na(alldata[[i]])),j=i,value = median(alldata$Fare,na.rm = T))
+
+alldata [is.na(Cabin),Cabin := "Miss"]
+
+alldata$Fare <- log(alldata$Fare + 1)
+
+alldata [Parch == 9L, Parch := 0]
+
+```
+
+
+## Logistic Regression
+
+
+```{r}
+train <- alldata[!(is.na(Survived))]
+train [,Survived := as.factor(Survived)]
+
+
+test <- alldata[is.na(Survived)]
+test [,Survived := NULL]
+
+model <- glm(Survived ~ ., family = binomial(link = 'logit'), data = train[,-c("PassengerId","Name","Ticket")])
+summary(model)
+anova(model, test = 'Chisq')
+```
+
+
+The glm function internally encodes categorical variables into n - 1 distinct levels.
+Estimate represents the regression coefficients value. Here, the regression coefficients explain the change in log(odds) of the response variable for one unit change in the predictor variable.
+Std. Error represents the standard error associated with the regression coefficients.
+z value is analogous to t-statistics in multiple regression output. z value > 2 implies the corresponding variable is significant.
+p value determines the probability of significance of predictor variables. With 95% confidence level, a variable having p < 0.05 is considered an important predictor. The same can be inferred by observing stars against p value.
+
+
+
+
+```{r}
+
+```
+
+## New Model
+```{r}
+model2 <- glm(Survived ~ Pclass + Sex + Age + SibSp + Fare + title, data = train,family = binomial(link="logit"))
+summary(model2)
+anova(model,model2,test = "Chisq")
+```
+
+## Predict
+```{r}
+library(caret)
+split <- createDataPartition(y = train$Survived,p = 0.6,list = FALSE)
+
+new_train <- train[split] 
+new_test <- train[-split]
+
+log_model <- glm(Survived ~ Pclass + Sex + Age + SibSp + Fare + title, data = new_train[,-c("PassengerId","Name","Ticket")],family = binomial(link="logit"))
+log_predict <- predict(log_model,newdata = new_test,type = "response")
+log_predict <- ifelse(log_predict > 0.5,1,0)
+
+```
+
+## Plot ROC
+
+```{r}
+library(ROCR) 
+library(Metrics)
+pr <- prediction(log_predict,new_test$Survived)
+perf <- performance(pr,measure = "tpr",x.measure = "fpr") 
+plot(perf) > auc(new_test$Survived,log_predict) #0.76343
+```
+
+
+
+
+## AUC
+
+```{r}
+log_predict <- predict(log_model,newdata = new_test,type = "response")
+log_predict <- ifelse(log_predict > 0.6,1,0)
+
+pr <- prediction(log_predict,new_test$Survived)
+perf <- performance(pr,measure = "tpr",x.measure = "fpr")
+plot(perf)
+auc(new_test$Survived,log_predict)
+```
+
